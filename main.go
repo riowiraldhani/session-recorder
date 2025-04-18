@@ -8,36 +8,37 @@ import (
 	"time"
 )
 
-const (
-	LOG_DIR = "/var/log/sessions/"
-)
+const LOG_DIR = "/var/log/sessions/"
 
 func main() {
-	// Detect session type (SSH or SSM)
+	// Prevent recursion: don't run if already in a script session
+	if os.Getenv("SCRIPT_SESSION") == "true" {
+		return
+	}
+
+	user := os.Getenv("USER")
+	if user == "" {
+		user = "unknown"
+	}
+
 	sessionType := "ssh"
 	if strings.Contains(os.Getenv("SSH_CONNECTION"), "ssm") {
 		sessionType = "ssm"
 	}
 
-	// Unique session ID
-	sessionID := time.Now().Format("20060102-150405") + "-" + os.Getenv("USER") + "-" + sessionType
+	sessionID := time.Now().Format("20060102-150405") + "-" + user + "-" + sessionType
 	logFile := LOG_DIR + sessionID + ".log"
 
-	// Ensure log directory exists
-	if err := os.MkdirAll(LOG_DIR, 0755); err != nil {
-		log.Fatalf("Failed to create log directory: %v", err)
-	}
+	log.Printf("Recording session to %s\n", logFile)
 
-	// Start recording session
-	cmd := exec.Command("script", "-f", logFile)
+	cmd := exec.Command("script", "-f", "-q", "-c", os.Getenv("SHELL"), logFile)
+	// Prevent recursion in subprocess
+	cmd.Env = append(os.Environ(), "SCRIPT_SESSION=true")
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	log.Printf("Recording session to %s", logFile)
 	if err := cmd.Run(); err != nil {
-		log.Fatalf("Failed to record session: %v", err)
+		log.Printf("Error starting session recording: %v", err)
 	}
-
-	log.Printf("Session recording saved: %s", logFile)
 }
