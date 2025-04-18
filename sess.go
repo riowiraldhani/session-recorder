@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	"os/exec"
 )
 
 func main() {
@@ -28,19 +29,29 @@ func main() {
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
-	// Gracefully handle session close
+	// Run a bash shell as a subprocess to capture all commands, including 'sudo su'
+	cmd := exec.Command("/bin/bash") // You can use '/bin/bash' or any other shell
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+
+	// Start the shell session
+	if err := cmd.Start(); err != nil {
+		logger.Printf("Error starting shell session: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Go routine to handle session closure
 	go func() {
 		sigReceived := <-signalChannel
 		logger.Printf("[SESSION CLOSED] %s - Received signal: %s\n", time.Now().Format(time.RFC3339), sigReceived)
-		// Exit after logging session close
+		cmd.Process.Kill() // Ensure that the subprocess (bash/shell) is killed
 		os.Exit(0)
 	}()
 
-	// Simulate interactive session (you can replace this with real work)
-	// You can also use this as a place for interactive sessions to run their tasks
-	for {
-		// Simulating a long-running process
-		// In a real use case, replace this with your actual session tasks
-		time.Sleep(1 * time.Second)
+	// Wait for the shell to exit
+	if err := cmd.Wait(); err != nil {
+		logger.Printf("Error waiting for shell process: %v\n", err)
 	}
+
 }
