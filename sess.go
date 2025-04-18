@@ -1,38 +1,37 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
-	"os/exec"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
 func main() {
-	username := os.Getenv("USER") // or get from os/user
-	timestamp := time.Now().Format("20060102-150405")
-	logPath := "/var/log/sessions/" + timestamp + "-" + username + "-ssh.log"
-
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY, 0644)
+	// Define the log file path and create/open the log file
+	logFilePath := fmt.Sprintf("/var/log/sessions/%s-%s-%s.log", time.Now().Format("20060102"), time.Now().Format("150405"), "session")
+	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		log.Fatalf("Failed to create log file: %v", err)
+		log.Fatal(err)
 	}
 	defer logFile.Close()
 
-	log.Printf("Recording session to %s", logPath)
+	// Create a new logger
+	logger := log.New(logFile, "", log.LstdFlags)
 
-	cmd := exec.Command("script", "-q", "-f", logPath)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	// Start the session log with a session start message
+	logger.Println("[SESSION STARTED]", time.Now().Format(time.RFC3339))
 
-	err = cmd.Run()
+	// Create a channel to capture OS signals
+	signalChannel := make(chan os.Signal, 1)
+	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
-	// 🔥 This will always run, even if session closes due to tab/browser exit
-	logFile.WriteString("[SESSION CLOSED] " + time.Now().UTC().Format(time.RFC1123) + "\n")
+	// Wait for the termination signal
+	sigReceived := <-signalChannel
+	logger.Printf("[SESSION CLOSED] %s - Received signal: %s\n", time.Now().Format(time.RFC3339), sigReceived)
 
-	if err != nil {
-		log.Printf("Script exited with error: %v", err)
-	} else {
-		log.Printf("Script exited cleanly.")
-	}
+	// Gracefully exit
+	fmt.Println("Session closed. Logs have been saved.")
 }
