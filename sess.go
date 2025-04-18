@@ -21,17 +21,26 @@ func main() {
 	// Create a new logger
 	logger := log.New(logFile, "", log.LstdFlags)
 
-	// Start the session log with a session start message
+	// Log session start
 	logger.Println("[SESSION STARTED]", time.Now().Format(time.RFC3339))
 
-	// Create a channel to capture OS signals
+	// Capture signals for session termination (Ctrl+C, SIGTERM, etc.)
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
-	// Wait for the termination signal
-	sigReceived := <-signalChannel
-	logger.Printf("[SESSION CLOSED] %s - Received signal: %s\n", time.Now().Format(time.RFC3339), sigReceived)
+	// Gracefully handle session close
+	go func() {
+		sigReceived := <-signalChannel
+		logger.Printf("[SESSION CLOSED] %s - Received signal: %s\n", time.Now().Format(time.RFC3339), sigReceived)
+		// Exit after logging session close
+		os.Exit(0)
+	}()
 
-	// Gracefully exit
-	fmt.Println("Session closed. Logs have been saved.")
+	// Simulate interactive session (you can replace this with real work)
+	// You can also use this as a place for interactive sessions to run their tasks
+	for {
+		// Simulating a long-running process
+		// In a real use case, replace this with your actual session tasks
+		time.Sleep(1 * time.Second)
+	}
 }
